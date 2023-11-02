@@ -109,7 +109,7 @@ fn writexgb() -> Result<(),MyError>  {
         } 
                 
     } 
-
+    // 1024 * 1024 for 4 gb
     let len = 1024 * 10; 
 
     let start = Instant::now();
