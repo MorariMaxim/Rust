@@ -1,0 +1,24 @@
+bm add foxes https://www.reddit.com/r/foxes/
+bm add rust_book https://doc.rust-lang.org/book/
+bm add foxes_pics https://www.boredpanda.com/beautiful-fox-pictures/
+
+
+bm search rust
+bm search fox
+
+
+ping
+ping abc
+
+count
+count a b c
+count a
+count a             b
+   count a             b   
+
+times
+times
+times abc
+
+eval 2 * (3 + 4) / 5
+stop
