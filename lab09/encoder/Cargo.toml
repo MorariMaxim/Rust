@@ -1,0 +1,9 @@
+[package]
+name = "encoder"
+version = "0.1.0"
+edition = "2021"
+
+ 
+[dependencies]
+base64 = { path = "../base64" }
+clap = { version = "4", features = ["derive"] }

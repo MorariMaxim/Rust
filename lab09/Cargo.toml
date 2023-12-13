@@ -1,0 +1,21 @@
+[workspace]
+
+[package]
+name = "my_workspace"
+version = "0.1.0"
+edition = "2021"
+
+resolver = "2"
+
+members = [
+    "base64",
+    "encoder",
+]
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+base64 = { path = "base64" }
+
+[[bin]]
+name = "encoder"
+path = "encoder/src/lib.rs"
