@@ -1,19 +1,24 @@
-fn serialize(&self) -> std::io::Result<Vec<u8>> {
+fn serialize(&self) -> std::io::Result<Vec<u8>>; {
 
-    let output = vec![0u8];
-    let next : usize = 0;
+    let destination = bitvec![u8, Lsb0;]; 
 
-    write_starting_from(&self,output,next)?;
+    write_bits_to(&self,destination)?;
 
-    output
+    Ok(destination.into_vec())
 }
 
-
-fn write_starting_from(&self, destination: &Vec<u8>, next : usize  ) -> std::io::Result<usize> {
+fn write_bits_to(&self, destination: &BitVec<u8>) -> std::io::Result<()> {
     
-    for field in self.fields{
+    for field in self.fields {
 
-        next = write_starting_from(&field, output, next)?;
+        next = write_bits_to(&field, destination)?;
 
     }
+
+    Ok (())
+}
+
+pub trait BitSerdeSerialization {
+    fn serialize(&self) -> std::io::Result<Vec<u8>>;
+    fn write_bits_to(&self, destination: &BitVec<u8>) -> std::io::Result<()>;
 }

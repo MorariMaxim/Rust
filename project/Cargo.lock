@@ -25,6 +25,8 @@ name = "bit_serde_trait"
 version = "0.1.0"
 dependencies = [
  "bit_serde_macro",
+ "bitvec",
+ "byteorder",
 ]
 
 [[package]]

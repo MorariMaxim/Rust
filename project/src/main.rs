@@ -1,6 +1,9 @@
 use std::collections::btree_map::VacantEntry;
 
+use std::str::from_boxed_utf8_unchecked;
+
 use bit_serde_trait::bit_serde;
+use bit_serde_trait::BitSerdeDeserialization;
 use bit_serde_trait::BitSerdeSerialization;
 
 /*#[bit_serde(Deserialize,Serialize)]
@@ -12,27 +15,21 @@ struct myStr {
  */
 extern crate byteorder;
 use bitvec::view::BitView;
+use byteorder::ReadBytesExt;
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 
 use bitvec::prelude::*;
 
-fn main() {
-    use bitvec::prelude::*;
+use std::mem;
+fn main() -> std::io::Result<()> {
+    let num = 32.5f64;
+    let bytes: Vec<u8> = num.serialize()?;
+    //let num =  <f32>::deserialize(&bytes);
 
-    let mut bv = bitvec![u8, Lsb0;];
-    bv.push(true);
+    let bytes: BitVec<u8, Lsb0> = BitVec::from_vec(bytes);
 
-    let bs = bv.as_raw_mut_slice();
+    let num = <f64>::deserialize_from(&bytes);
 
-    let mut chunks = bs.view_bits_mut::<Lsb0>().chunks_mut(8);
-
-    let store = chunks.next().unwrap();
-
-    store.store(128);
-
-    let x = store.load::<u8>();
-
-    println!("{x}");
-
-    let sl = bs.view_bits_mut::<Msb0>();
+    println!("num = {num}");
+    Ok(())
 }
