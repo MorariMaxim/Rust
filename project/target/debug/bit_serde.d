@@ -1,0 +1,1 @@
+D:\Uni\Anul\ 2\Rust\bit_serde\target\debug\bit_serde.exe: D:\Uni\Anul\ 2\Rust\bit_serde\bit_serde_macro\src\lib.rs D:\Uni\Anul\ 2\Rust\bit_serde\bit_serde_trait\src\lib.rs D:\Uni\Anul\ 2\Rust\bit_serde\src\main.rs

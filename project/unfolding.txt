@@ -1,0 +1,19 @@
+fn serialize(&self) -> std::io::Result<Vec<u8>> {
+
+    let output = vec![0u8];
+    let next : usize = 0;
+
+    write_starting_from(&self,output,next)?;
+
+    output
+}
+
+
+fn write_starting_from(&self, destination: &Vec<u8>, next : usize  ) -> std::io::Result<usize> {
+    
+    for field in self.fields{
+
+        next = write_starting_from(&field, output, next)?;
+
+    }
+}
