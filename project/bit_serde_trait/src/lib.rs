@@ -1,7 +1,6 @@
 pub fn add(left: usize, right: usize) -> usize {
     left + right
-}
-pub use ::bit_serde_macro::*;
+} 
 extern crate byteorder;
 use bitvec::prelude::*;
 use bitvec::view::BitView;

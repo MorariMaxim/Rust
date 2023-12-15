@@ -10,3 +10,5 @@ proc-macro = true
 proc-macro2 = "1"
 quote = "1"
 syn = "1.0" 
+bit_serde_trait = { path = "../bit_serde_trait" }
+watt = "0.5"

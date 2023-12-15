@@ -1,12 +1,3 @@
-fn serialize(&self) -> std::io::Result<Vec<u8>>; {
-
-    let destination = bitvec![u8, Lsb0;]; 
-
-    write_bits_to(&self,destination)?;
-
-    Ok(destination.into_vec())
-}
-
 fn write_bits_to(&self, destination: &BitVec<u8>) -> std::io::Result<()> {
     
     for field in self.fields {
