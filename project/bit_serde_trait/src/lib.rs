@@ -9,24 +9,25 @@ use bitvec::view::BitView;
 //           Main traits
 
 pub trait BitSerdeDeserialization {
-    const SIZE_IN_BITS: usize;
     fn deserialize(data: &Vec<u8>) -> Self;
+
     fn deserialize_from(data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self);
 }
 pub trait BitSerdeSerialization {
-    fn serialize(&self) -> std::io::Result<Vec<u8>>;
+    fn serialize(&self) -> std::io::Result<Vec<u8>> {
+        let mut destination = bitvec!(u8,Lsb0;);
+        destination.force_align();
+
+        self.write_bits_to(&mut destination)?;
+        destination.force_align();
+
+        Ok(destination.into())
+    }
     fn write_bits_to(&self, destination: &mut BitVec<u8, Lsb0>) -> std::io::Result<()>;
 }
 
 //      IMplementation for Vectors
 impl<E: BitSerdeSerialization> BitSerdeSerialization for Vec<E> {
-    fn serialize(&self) -> std::io::Result<Vec<u8>> {
-        let mut destination = bitvec!(u8,Lsb0;);
-
-        self.write_bits_to(&mut destination)?;
-
-        Ok(destination.into())
-    }
     fn write_bits_to(&self, destination: &mut BitVec<u8, Lsb0>) -> std::io::Result<()> {
         let len = self.len();
 
@@ -40,8 +41,6 @@ impl<E: BitSerdeSerialization> BitSerdeSerialization for Vec<E> {
     }
 }
 impl<E: BitSerdeDeserialization> BitSerdeDeserialization for Vec<E> {
-    const SIZE_IN_BITS: usize = <E>::SIZE_IN_BITS;
-
     fn deserialize(data: &Vec<u8>) -> Self {
         let bs = data.view_bits::<Lsb0>();
 
@@ -89,14 +88,6 @@ macro_rules! implement_traits_for_unsigned_types {
     ($($t:ty),*) => {
         $(
             impl BitSerdeSerialization for $t {
-                fn serialize(&self) -> std::io::Result<Vec<u8>> {
-
-                    let mut destination = bitvec![u8, Lsb0;];
-
-                    BitSerdeSerialization::write_bits_to(self,&mut destination)?;
-
-                    Ok(destination.into_vec())
-                }
                 fn write_bits_to(&self, destination: &mut BitVec<u8,Lsb0>) -> std::io::Result<()> {
 
                     let bytes = self.to_le_bytes();
@@ -108,7 +99,6 @@ macro_rules! implement_traits_for_unsigned_types {
             }
 
             impl BitSerdeDeserialization for $t {
-                const SIZE_IN_BITS:usize = mem::size_of::<$t>();
 
                 fn deserialize(data: &Vec<u8>) -> Self {
 
@@ -145,13 +135,6 @@ implement_traits_for_unsigned_types!(u8, u16, u32, u64, u128, i8, i16, i32, i64,
 //      Implementation for String
 
 impl BitSerdeSerialization for String {
-    fn serialize(&self) -> std::io::Result<Vec<u8>> {
-        let mut destination = bitvec!(u8,Lsb0;);
-
-        self.write_bits_to(&mut destination)?;
-
-        Ok(destination.into())
-    }
     fn write_bits_to(&self, destination: &mut BitVec<u8, Lsb0>) -> std::io::Result<()> {
         let len = self.len();
 
@@ -165,7 +148,6 @@ impl BitSerdeSerialization for String {
 }
 
 impl BitSerdeDeserialization for String {
-    const SIZE_IN_BITS: usize = 0;
     fn deserialize(data: &Vec<u8>) -> Self {
         let bs = data.view_bits::<Lsb0>();
 
@@ -184,13 +166,6 @@ impl BitSerdeDeserialization for String {
 
 //      Implementation for Bool
 impl BitSerdeSerialization for bool {
-    fn serialize(&self) -> std::io::Result<Vec<u8>> {
-        let mut destination = bitvec!(u8,Lsb0;);
-
-        self.write_bits_to(&mut destination)?;
-
-        Ok(destination.into())
-    }
     fn write_bits_to(&self, destination: &mut BitVec<u8, Lsb0>) -> std::io::Result<()> {
         destination.push(*self);
         Ok(())
@@ -198,7 +173,6 @@ impl BitSerdeSerialization for bool {
 }
 
 impl BitSerdeDeserialization for bool {
-    const SIZE_IN_BITS: usize = 1;
     fn deserialize(data: &Vec<u8>) -> Self {
         let bs = data.view_bits::<Lsb0>();
 
@@ -215,13 +189,6 @@ impl BitSerdeDeserialization for bool {
 
 //      Implementation for char
 impl BitSerdeSerialization for char {
-    fn serialize(&self) -> std::io::Result<Vec<u8>> {
-        let mut destination = bitvec!(u8,Lsb0;);
-
-        self.write_bits_to(&mut destination)?;
-
-        Ok(destination.into())
-    }
     fn write_bits_to(&self, destination: &mut BitVec<u8, Lsb0>) -> std::io::Result<()> {
         let len = self.len_utf8() - 1;
 
@@ -239,7 +206,6 @@ impl BitSerdeSerialization for char {
 }
 
 impl BitSerdeDeserialization for char {
-    const SIZE_IN_BITS: usize = 0;
     fn deserialize(data: &Vec<u8>) -> Self {
         let bs = data.view_bits::<Lsb0>();
 
@@ -266,15 +232,22 @@ impl BitSerdeDeserialization for char {
 
 pub trait BitSerdeDeserializationMax {
     fn deserialize_with_max(data: &Vec<u8>, max: usize) -> Self;
-    fn deserialize_from_with_max(data: &BitSlice<u8, Lsb0>, max: usize) -> (&BitSlice<u8, Lsb0>, Self);
+    fn deserialize_from_with_max(
+        data: &BitSlice<u8, Lsb0>,
+        max: usize,
+    ) -> (&BitSlice<u8, Lsb0>, Self);
 }
 pub trait BitSerdeSerializationMax {
     fn serialize_with_max(&self, max: usize) -> std::io::Result<Vec<u8>>;
-    fn write_bits_to_with_max(&self, destination: &mut BitVec<u8, Lsb0>, max: usize) -> std::io::Result<()>;
+    fn write_bits_to_with_max(
+        &self,
+        destination: &mut BitVec<u8, Lsb0>,
+        max: usize,
+    ) -> std::io::Result<()>;
 }
 
 pub fn compute_size(max: usize) -> usize {
-    ((max+1) as f64).log2().ceil() as usize
+    ((max + 1) as f64).log2().ceil() as usize
 }
 
 macro_rules! implement_trait_with_constraint {
@@ -290,7 +263,7 @@ macro_rules! implement_trait_with_constraint {
                     Ok(destination.into_vec())
                 }
                 fn write_bits_to_with_max(&self, destination: &mut BitVec<u8,Lsb0>,max:usize) -> std::io::Result<()> {
- 
+
                     let size =  {
                         let bits = compute_size(max);
 
@@ -303,8 +276,9 @@ macro_rules! implement_trait_with_constraint {
                         }
                     };
                     
-
-                    let bs = self.view_bits::<Lsb0>();
+                    let bs = self.to_le_bytes();
+                    let bs = bs.view_bits::<Lsb0>();
+                                        
                     let bs = bs.chunks(size).next().unwrap();
 
                     destination.extend(bs);
@@ -350,7 +324,7 @@ macro_rules! implement_trait_with_constraint {
     };
 }
 
-implement_trait_with_constraint!(u8,u64);
+implement_trait_with_constraint!(u8,u16,u32,u64,u128);
 
 #[cfg(test)]
 mod tests {
