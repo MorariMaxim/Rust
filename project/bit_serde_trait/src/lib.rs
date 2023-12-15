@@ -53,9 +53,9 @@ impl<E: BitSerdeDeserialization> BitSerdeDeserialization for Vec<E> {
         let mut bytes = data[0..SIZE * 8].to_bitvec();
         bytes.force_align();
         let bytes = bytes.into_vec();
-        
+
         if bytes.len() != SIZE {
-            panic!("uneuqal sizes, bytes.len = {}",bytes.len());
+            panic!("uneuqal sizes, bytes.len = {}", bytes.len());
         }
 
         let mut x: [u8; SIZE] = [0; SIZE];
@@ -66,7 +66,7 @@ impl<E: BitSerdeDeserialization> BitSerdeDeserialization for Vec<E> {
             it += 1;
         }
 
-        let len: usize = <usize>::from_le_bytes(x); 
+        let len: usize = <usize>::from_le_bytes(x);
 
         let mut vec = Vec::<E>::with_capacity(len);
 
@@ -82,7 +82,7 @@ impl<E: BitSerdeDeserialization> BitSerdeDeserialization for Vec<E> {
         (data, vec)
     }
 }
- 
+
 // Implementation for number types
 use std::mem;
 macro_rules! implement_traits_for_unsigned_types {
@@ -172,39 +172,11 @@ impl BitSerdeDeserialization for String {
         BitSerdeDeserialization::deserialize_from(&bs).1
     }
     fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self) {
-        const SIZE: usize = std::mem::size_of::<usize>();
+        let vec: (&BitSlice<u8, Lsb0>, Vec<u8>) = BitSerdeDeserialization::deserialize_from(data);
 
-        let bs = &data[0..SIZE * 8]; 
-        
-        let mut bs = bs.to_bitvec();
-        bs.force_align();
-        let bytes = bs.into_vec();
+        data = vec.0;
 
-        let bs = bytes.view_bits::<Lsb0>(); 
-
-        if bytes.len() != SIZE {
-            panic!("uneuqal sizes");
-        }
-
-        let mut x: [u8; SIZE] = [0; SIZE];
-
-        let mut it = 0u8;
-        for i in &bytes {
-            x[it as usize] = *i;
-            it += 1;
-        } 
-
-        let len: usize = <usize>::from_le_bytes(x); 
-
-        data = &data[SIZE * 8..]; 
-
-        let mut vec = data[0..len*8].to_bitvec();
-        vec.force_align();
-        let vec = vec.into_vec();
-
-        let str = String::from_utf8(vec).unwrap();
-        
-        data = &data[len*8..];
+        let str = String::from_utf8(vec.1).unwrap();
 
         (data, str)
     }
@@ -233,11 +205,10 @@ impl BitSerdeDeserialization for bool {
         BitSerdeDeserialization::deserialize_from(&bs).1
     }
     fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self) {
-         
         let val: bool = data[0];
 
         data = &data[1..];
- 
+
         (data, val)
     }
 }
@@ -259,9 +230,9 @@ impl BitSerdeSerialization for char {
         destination.push(bs[0]);
         destination.push(bs[1]);
 
-        for b in self.to_string().into_bytes() { 
+        for b in self.to_string().into_bytes() {
             destination.extend(b.view_bits::<Lsb0>())
-        } 
+        }
 
         Ok(())
     }
@@ -277,21 +248,110 @@ impl BitSerdeDeserialization for char {
     fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self) {
         let mut len: usize = data.chunks(2).next().unwrap().load_le();
         len += 1;
- 
-        let bs  = &data[2..(len*8+2)];
 
-        let mut bytes : Vec<u8> = Vec::with_capacity(len);
+        let bs = &data[2..(len * 8 + 2)];
+
+        let mut bytes: Vec<u8> = Vec::with_capacity(len);
         for c in bs.chunks(8) {
-            let val: u8 = c.load(); 
+            let val: u8 = c.load();
             bytes.push(val);
         }
-        
+
         let val = std::str::from_utf8(&bytes).unwrap().chars().next().unwrap();
 
-        data = &data[(len*8+2)..];
+        data = &data[(len * 8 + 2)..];
         (data, val)
     }
 }
+
+pub trait BitSerdeDeserializationMax {
+    fn deserialize_with_max(data: &Vec<u8>, max: usize) -> Self;
+    fn deserialize_from_with_max(data: &BitSlice<u8, Lsb0>, max: usize) -> (&BitSlice<u8, Lsb0>, Self);
+}
+pub trait BitSerdeSerializationMax {
+    fn serialize_with_max(&self, max: usize) -> std::io::Result<Vec<u8>>;
+    fn write_bits_to_with_max(&self, destination: &mut BitVec<u8, Lsb0>, max: usize) -> std::io::Result<()>;
+}
+
+pub fn compute_size(max: usize) -> usize {
+    ((max+1) as f64).log2().ceil() as usize
+}
+
+macro_rules! implement_trait_with_constraint {
+    ($($t:ty),*) => {
+        $(
+            impl BitSerdeSerializationMax for $t {
+                fn serialize_with_max(&self, max:usize) -> std::io::Result<Vec<u8>> {
+
+                    let mut destination = bitvec![u8, Lsb0;];
+
+                    BitSerdeSerializationMax::write_bits_to_with_max(self,&mut destination,max)?;
+
+                    Ok(destination.into_vec())
+                }
+                fn write_bits_to_with_max(&self, destination: &mut BitVec<u8,Lsb0>,max:usize) -> std::io::Result<()> {
+ 
+                    let size =  {
+                        let bits = compute_size(max);
+
+                        let type_size = std::mem::size_of::<$t>();
+                        if (bits) > (type_size * 8) {
+                            type_size * 8
+                        }
+                        else {
+                            bits
+                        }
+                    };
+                    
+
+                    let bs = self.view_bits::<Lsb0>();
+                    let bs = bs.chunks(size).next().unwrap();
+
+                    destination.extend(bs);
+
+                    Ok(())
+                }
+            }
+
+            impl BitSerdeDeserializationMax for $t {
+
+                fn deserialize_with_max(data: &Vec<u8>, max: usize) -> Self {
+
+                    let bs = data.view_bits::<Lsb0>();
+
+                    BitSerdeDeserializationMax::deserialize_from_with_max(bs,max).1
+                }
+
+                fn deserialize_from_with_max(mut data: &BitSlice<u8,Lsb0>, max: usize) -> (&BitSlice<u8, Lsb0>,Self) {
+
+                    let size =  {
+                        let bits = compute_size(max);
+
+                        let type_size = std::mem::size_of::<$t>();
+                        if (bits) > (type_size * 8) {
+                            type_size * 8
+                        }
+                        else {
+                            bits
+                        }
+                    };
+
+                    let mut bv = data[..size].to_bitvec();
+                    bv.force_align();
+
+                    let val : $t = bv.load_le();
+
+                    data = &data[size..];
+
+                    (data, val)
+                }
+            }
+        )*
+    };
+}
+
+implement_trait_with_constraint!(u8,u64);
+
 #[cfg(test)]
 mod tests {
     use super::*;
