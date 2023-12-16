@@ -245,14 +245,7 @@ fn struct_implementation(input: &DeriveInput, ser_flag : bool, deser_flag : bool
                                             
                     #result
 
-                    impl BitSerdeDeserialization for #struct_name {
-
-                        fn deserialize(data: &Vec<u8>) -> Self {
-
-                            let bs = data.view_bits::<Lsb0>();
-
-                            BitSerdeDeserialization::deserialize_from(bs).1
-                        }
+                    impl BitSerdeDeserialization for #struct_name { 
                         fn deserialize_from(mut data: &BitSlice<u8,Lsb0>) -> (&BitSlice<u8, Lsb0>,Self) {
 
                             #(#field_deserialize_from)*
@@ -331,12 +324,7 @@ fn enum_implementation(input: &mut DeriveInput, ser_flag : bool, deser_flag : bo
 
                 #result
 
-                impl BitSerdeDeserialization for #enum_name {
-                    fn deserialize(data: &Vec<u8>) -> Self {
-                        let bs = data.view_bits::<Lsb0>();
-                
-                        BitSerdeDeserialization::deserialize_from(bs).1
-                    }
+                impl BitSerdeDeserialization for #enum_name { 
                     fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&bitvec::slice::BitSlice<u8>, #enum_name) {
 
                         let parts:(&BitSlice<u8,Lsb0>, u128 )  = BitSerdeDeserializationMax::deserialize_from_with_max(&data,#fields_counter);

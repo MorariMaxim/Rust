@@ -1,14 +1,16 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-extern crate byteorder;
 use bitvec::prelude::*;
-use bitvec::view::BitView;
 
 //           Main traits
 
-pub trait BitSerdeDeserialization {
-    fn deserialize(data: &Vec<u8>) -> Self;
+pub trait BitSerdeDeserialization
+where
+    Self: Sized,
+{
+    fn deserialize(data: &Vec<u8>) -> Self {
+        let bs = data.view_bits::<Lsb0>();
+
+        BitSerdeDeserialization::deserialize_from(bs).1
+    }
 
     fn deserialize_from(data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self);
 }
@@ -40,11 +42,6 @@ impl<E: BitSerdeSerialization> BitSerdeSerialization for Vec<E> {
     }
 }
 impl<E: BitSerdeDeserialization> BitSerdeDeserialization for Vec<E> {
-    fn deserialize(data: &Vec<u8>) -> Self {
-        let bs = data.view_bits::<Lsb0>();
-
-        BitSerdeDeserialization::deserialize_from(bs).1
-    }
     fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&bitvec::slice::BitSlice<u8>, Vec<E>) {
         const SIZE: usize = std::mem::size_of::<usize>();
 
@@ -99,13 +96,6 @@ macro_rules! implement_traits_for_unsigned_types {
 
             impl BitSerdeDeserialization for $t {
 
-                fn deserialize(data: &Vec<u8>) -> Self {
-
-                    let bs = data.view_bits::<Lsb0>();
-
-                    BitSerdeDeserialization::deserialize_from(bs).1
-                }
-
                 fn deserialize_from(mut data: &BitSlice<u8,Lsb0>) -> (&BitSlice<u8, Lsb0>,Self) {
 
                     const SIZE : usize = mem::size_of::<$t>();
@@ -147,11 +137,6 @@ impl BitSerdeSerialization for String {
 }
 
 impl BitSerdeDeserialization for String {
-    fn deserialize(data: &Vec<u8>) -> Self {
-        let bs = data.view_bits::<Lsb0>();
-
-        BitSerdeDeserialization::deserialize_from(&bs).1
-    }
     fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self) {
         let vec: (&BitSlice<u8, Lsb0>, Vec<u8>) = BitSerdeDeserialization::deserialize_from(data);
 
@@ -172,11 +157,6 @@ impl BitSerdeSerialization for bool {
 }
 
 impl BitSerdeDeserialization for bool {
-    fn deserialize(data: &Vec<u8>) -> Self {
-        let bs = data.view_bits::<Lsb0>();
-
-        BitSerdeDeserialization::deserialize_from(&bs).1
-    }
     fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self) {
         let val: bool = data[0];
 
@@ -205,11 +185,6 @@ impl BitSerdeSerialization for char {
 }
 
 impl BitSerdeDeserialization for char {
-    fn deserialize(data: &Vec<u8>) -> Self {
-        let bs = data.view_bits::<Lsb0>();
-
-        BitSerdeDeserialization::deserialize_from(&bs).1
-    }
     fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self) {
         let mut len: usize = data.chunks(2).next().unwrap().load_le();
         len += 1;
@@ -229,8 +204,15 @@ impl BitSerdeDeserialization for char {
     }
 }
 
-pub trait BitSerdeDeserializationMax {
-    fn deserialize_with_max(data: &Vec<u8>, max: usize) -> Self;
+pub trait BitSerdeDeserializationMax
+where
+    Self: Sized,
+{
+    fn deserialize_with_max(data: &Vec<u8>, max: usize) -> Self {
+        let bs = data.view_bits::<Lsb0>();
+
+        BitSerdeDeserializationMax::deserialize_from_with_max(bs, max).1
+    }
     fn deserialize_from_with_max(
         data: &BitSlice<u8, Lsb0>,
         max: usize,
@@ -241,7 +223,7 @@ pub trait BitSerdeSerializationMax {
         let mut destination = bitvec!(u8,Lsb0;);
         destination.force_align();
 
-        self.write_bits_to_with_max(&mut destination,max)?; 
+        self.write_bits_to_with_max(&mut destination, max)?;
         destination.force_align();
 
         Ok(destination.into())
@@ -260,15 +242,7 @@ pub fn compute_size(max: usize) -> usize {
 macro_rules! implement_trait_with_constraint {
     ($($t:ty),*) => {
         $(
-            impl BitSerdeSerializationMax for $t {
-                fn serialize_with_max(&self, max:usize) -> std::io::Result<Vec<u8>> {
-
-                    let mut destination = bitvec![u8, Lsb0;];
-
-                    BitSerdeSerializationMax::write_bits_to_with_max(self,&mut destination,max)?;
-
-                    Ok(destination.into_vec())
-                }
+            impl BitSerdeSerializationMax for $t { 
                 fn write_bits_to_with_max(&self, destination: &mut BitVec<u8,Lsb0>,max:usize) -> std::io::Result<()> {
 
                     let size =  {
@@ -294,15 +268,7 @@ macro_rules! implement_trait_with_constraint {
                 }
             }
 
-            impl BitSerdeDeserializationMax for $t {
-
-                fn deserialize_with_max(data: &Vec<u8>, max: usize) -> Self {
-
-                    let bs = data.view_bits::<Lsb0>();
-
-                    BitSerdeDeserializationMax::deserialize_from_with_max(bs,max).1
-                }
-
+            impl BitSerdeDeserializationMax for $t { 
                 fn deserialize_from_with_max(mut data: &BitSlice<u8,Lsb0>, max: usize) -> (&BitSlice<u8, Lsb0>,Self) {
 
                     let size =  {
@@ -358,7 +324,7 @@ impl<E: BitSerdeSerialization> BitSerdeSerializationMax for Vec<E> {
         let bs = bs.chunks(size).next().unwrap();
 
         destination.extend(bs);
-        
+
         for el in self.iter() {
             el.write_bits_to(destination)?;
         }
@@ -366,19 +332,11 @@ impl<E: BitSerdeSerialization> BitSerdeSerializationMax for Vec<E> {
         Ok(())
     }
 }
-impl<E: BitSerdeDeserialization> BitSerdeDeserializationMax for Vec<E> {
-    
-    fn deserialize_with_max(data: &Vec<u8>, max: usize) -> Self {
-        let bs = data.view_bits::<Lsb0>();
-
-        BitSerdeDeserializationMax::deserialize_from_with_max(bs,max).1  
-    }
- 
+impl<E: BitSerdeDeserialization> BitSerdeDeserializationMax for Vec<E> { 
     fn deserialize_from_with_max(
-            mut data: &BitSlice<u8, Lsb0>,
-            max: usize,
-        ) -> (&BitSlice<u8, Lsb0>, Self) {
-         
+        mut data: &BitSlice<u8, Lsb0>,
+        max: usize,
+    ) -> (&BitSlice<u8, Lsb0>, Self) {
         let size = {
             let bits = compute_size(max);
 
@@ -392,7 +350,7 @@ impl<E: BitSerdeDeserialization> BitSerdeDeserializationMax for Vec<E> {
 
         let bs = &data[0..size];
 
-        let len: usize = bs.load_le(); 
+        let len: usize = bs.load_le();
 
         let mut vec = Vec::<E>::with_capacity(len);
 
@@ -409,32 +367,27 @@ impl<E: BitSerdeDeserialization> BitSerdeDeserializationMax for Vec<E> {
     }
 }
 
-impl BitSerdeSerializationMax for String{
+impl BitSerdeSerializationMax for String {
     fn write_bits_to_with_max(
-            &self,
-            destination: &mut BitVec<u8, Lsb0>,
-            max: usize,
-        ) -> std::io::Result<()> {
-        let vec : Vec<u8> = self.as_bytes().into();
+        &self,
+        destination: &mut BitVec<u8, Lsb0>,
+        max: usize,
+    ) -> std::io::Result<()> {
+        let vec: Vec<u8> = self.as_bytes().into();
         vec.write_bits_to_with_max(destination, max)?;
         Ok(())
     }
 }
-impl BitSerdeDeserializationMax for String {
-    fn deserialize_with_max(data: &Vec<u8>, max: usize) -> Self {
-        let bs = data.view_bits::<Lsb0>();
-
-        BitSerdeDeserializationMax::deserialize_from_with_max(bs,max).1  
-    }
+impl BitSerdeDeserializationMax for String { 
     fn deserialize_from_with_max(
-            mut data: &BitSlice<u8, Lsb0>,
-            max: usize,
-        ) -> (&BitSlice<u8, Lsb0>, Self) {
-        
-            let parts :(&BitSlice<u8,Lsb0>,Vec<u8>) = BitSerdeDeserializationMax::deserialize_from_with_max(data, max); 
-            data = parts.0;
+        mut data: &BitSlice<u8, Lsb0>,
+        max: usize,
+    ) -> (&BitSlice<u8, Lsb0>, Self) {
+        let parts: (&BitSlice<u8, Lsb0>, Vec<u8>) =
+            BitSerdeDeserializationMax::deserialize_from_with_max(data, max);
+        data = parts.0;
 
-            (data,String::from_utf8(parts.1).unwrap())
+        (data, String::from_utf8(parts.1).unwrap())
     }
 }
 

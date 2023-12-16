@@ -14,9 +14,10 @@ struct TestStruct {
     friends: Vec<NameStruct>,
     #[max = 130]
     age: u128,
-    #[max = 15]
+    #[max = 3]
     filler: u128,
     clas: Class,
+    favourite_char : char
 }
 #[bit_serde(Serialize, Deserialize)]
 #[derive(Debug)]
@@ -36,7 +37,8 @@ enum Class {
     Evocator,
 }
 use bitvec::prelude::*;
-fn main() -> std::io::Result<()> {
+fn main() -> std::io::Result<()> {    
+
     let test_instance = TestStruct {
         name: String::from("John Doe"),
         gender: true,
@@ -51,6 +53,7 @@ fn main() -> std::io::Result<()> {
         age: 25,
         filler: 2,
         clas: Class::Warrior,
+        favourite_char : '🦀'
     };
     let serialized_obj: Vec<u8> = test_instance.serialize()?;
     /*
@@ -76,13 +79,17 @@ fn main() -> std::io::Result<()> {
 
     so far 21 bytes
 
-    size of filler is 4 bits
+    size of filler is 2 bits
 
     size of clas is 3 bits
 
     size of gender is 1 bit
+
+    to encode a character, we use 2 bits to encode its length (an utf8 character has at maximum 4 bytes) and the bytes themselves
+
+    size of favourite_char is 4 bytes, 2 bits, 
     
-    21 bytes + 8 bits = 22 bytes
+    25 bytes + 8 bits = 26 bytes
      */
     println!("Size of serialized struct = {}", serialized_obj.len());
 
@@ -101,5 +108,6 @@ impl TestStruct {
         println!("{:?}", self.age);
         println!("{:?}", self.filler);
         println!("{:?}", self.clas);
+        println!("{:?}", self.favourite_char);
     }
 }
