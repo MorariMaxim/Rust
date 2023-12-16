@@ -1,4 +1,3 @@
-
 use bit_serde_macro::bit_serde;
 use bit_serde_trait::compute_size;
 use bit_serde_trait::BitSerdeDeserialization;
@@ -7,98 +6,90 @@ use bit_serde_trait::BitSerdeSerialization;
 use bit_serde_trait::BitSerdeSerializationMax;
 use bitvec::bitvec;
 
-
 #[bit_serde(Deserialize, Serialize)]
 struct TestStruct {
     name: String,
     gender: bool,
     friends: Vec<String>,
-    age: u8,
-} 
+    #[max = 130]
+    age: u128,
+    #[max = 7]
+    filler1 : u128,
+    #[max = 15]
+    filler2 : u128,
+    str : TestStruct2
+
+}
+#[derive(Default)]
+#[bit_serde(Deserialize,Serialize)]
+struct TestStruct2 {
+    #[max = 15]
+    _num1 : u128,
+    #[max = 15]
+    _num2 : u128,
+    #[max = 15]
+    _num3 : u128,
+    #[max = 15]
+    _num4 : u128,
+}
+
 
 use bitvec::prelude::*;
 fn main() -> std::io::Result<()> {
+
+    let test_instance2 = TestStruct2::default();
+        
+    let serialized_obj: Vec<u8> = test_instance2.serialize()?;
+
+    println!("Size of serialized struct = {}",serialized_obj.len()); 
+    //  3<log(15)<4, 4*4 = 16 = 2 bytes, without max attributes, the size is 16 * 4 = 64 bytes
+
+    
+
     let test_instance = TestStruct {
         name: String::from("John Doe"),
         gender: true,
         friends: vec![String::from("Alice"), String::from("Bob")],
         age: 25,
+        filler1 : 1,
+        filler2 : 2,
+        str : TestStruct2::default()
     };
-
     let serialized_obj: Vec<u8> = test_instance.serialize()?;
+    /*
+    the len of string/vec is encoded with 8 bytes(usize), 
+    size of name = 8 bytes + len(name) = 8+8=16     
+    size of friends = 8 bytes(for vec len) + 16( 8 bytes per string ) + 8(len(AlicBob)) = 32
+    size of age = log(130) = 1 byte    
+    size of str = size of TestStruct 2 = 2 bytes
+    size of gender = 1 bit
+    size of filler 1 = log(7) = 3 bits
+    size of filler 2 = log(15) = 4 bits
+    
+    total size = 51 bytes, 8 bits, that is 52 bytes    
+     */         
+    println!("Size of serialized struct = {}",serialized_obj.len());                                                                        
 
-    let deserialzed_obj : TestStruct = BitSerdeDeserialization::deserialize(&serialized_obj);
+    let deserialzed_obj: TestStruct = BitSerdeDeserialization::deserialize(&serialized_obj); 
 
     deserialzed_obj.print_fields();
     Ok(())
-}
-
-/*let vec1 = vec![13u8, 15, 17, 19];
-let flag1 = true;
-let vec2 = vec![1.3f32, 1.5, 1.7, 1.9];
-let mut bv = bitvec!(u8,Lsb0;);
-let str = String::from("this works!");
-let flag2 = false;
-let c = '€';
-let c2 = '😉';
+} 
 
 
-vec1.write_bits_to(&mut bv)?;
-flag1.write_bits_to(&mut bv)?;
-vec2.write_bits_to(&mut bv)?;
-str.write_bits_to(&mut bv)?;
-flag2.write_bits_to(&mut bv)?;
-c.write_bits_to(&mut bv)?;
-c2.write_bits_to(&mut bv)?;
 
-let vec = bv.into_vec();
-let mut bs = vec.view_bits::<Lsb0>();
-
-let vec:(&BitSlice<u8,Lsb0>,Vec<u8>)  = BitSerdeDeserialization::deserialize_from(&bs);
-bs = vec.0;
-println!("{:?}",vec.1);
-
-let vec:(&BitSlice<u8,Lsb0>,bool)  = BitSerdeDeserialization::deserialize_from(&bs);
-bs = vec.0;
-println!("{:?}",vec.1);
-
-let vec:(&BitSlice<u8,Lsb0>,Vec<f32>)  = BitSerdeDeserialization::deserialize_from(&bs);
-bs = vec.0;
-println!("{:?}",vec.1);
-
-let vec:(&BitSlice<u8,Lsb0>,String)  = BitSerdeDeserialization::deserialize_from(&bs);
-bs = vec.0;
-println!("{:?}",vec.1);
-
-let vec:(&BitSlice<u8,Lsb0>,bool)  = BitSerdeDeserialization::deserialize_from(&bs);
-bs = vec.0;
-println!("{:?}",vec.1);
-
-let vec:(&BitSlice<u8,Lsb0>,char)  = BitSerdeDeserialization::deserialize_from(&bs);
-bs = vec.0;
-println!("{:?}",vec.1);
-
-let vec:(&BitSlice<u8,Lsb0>,char)  = BitSerdeDeserialization::deserialize_from(&bs);
-//bs = vec.0;
-println!("{:?}",vec.1); */
-
- 
 impl TestStruct {
-
-    fn print_fields(&self){
-
-        println!("Name: {}",self.name);
+    fn print_fields(&self) {
+        println!("Name: {}", self.name);
         if self.gender {
             println!("Gender: Male");
-        }
-        else  {
+        } else {
             println!("Gender: Female");
         }
         println!("Friends: ");
         for f in self.friends.iter() {
-            print!("{} ",f);
+            print!("{} ", f);
         }
-        println!("\nAge: {}",self.age);
+        println!("\nAge: {}", self.age);
     }
-
-} 
+}
