@@ -161,13 +161,31 @@ fn struct_implementation(input: &DeriveInput, ser_flag : bool, deser_flag : bool
                     let field_write_bits_to = fields.iter().map(|f| {
                         let field_name = format_ident!("{}", f.ident.clone().unwrap().to_string());
                         let constraint = check_max_constraint(f); 
-                         
+                        let type_name = f.ty.to_token_stream().to_string();
                         if let Some(max) = constraint {
-                            let part1 = format!("SerializationError: field '{}'",f.ident.clone().unwrap().to_string());
-                            let part2 = format!("exceeds constraint '{}'",max);
+                            let part1 : String; 
+                            let part3 = format!(", which exceeds constraint '{}'",max);
+                            let value_to_compare  : TokenStream;
+                            match get_field_type(&f.ty) {
+                                FieldType::Other => {
+                                    panic!("cant implement bitlevel serialization for this thype{}",type_name);
+                                }
+                                FieldType::Unsigned =>{
+                                    value_to_compare = quote! {
+                                        self.#field_name
+                                    };
+                                    part1  = format!("SerializationError: value of field '{}'",f.ident.clone().unwrap().to_string());
+                                }   
+                                FieldType::VecOrString => {
+                                    value_to_compare = quote! {
+                                        self.#field_name.len()
+                                    };
+                                    part1  = format!("SerializationError: '{}.len()'",f.ident.clone().unwrap().to_string());                                    
+                                }
+                            };
                             quote_spanned! {f.ty.span() =>
-                                if (self.#field_name as usize) > #max {
-                                    let error_message = format!("{} = {} {}",#part1,self.#field_name, #part2);
+                                if (#value_to_compare as usize) > #max {
+                                    let error_message = format!("{} = {} {}",#part1,#value_to_compare, #part3);
                                     return Err(std::io::Error::new(std::io::ErrorKind::Other, error_message ));
                                 }
                                 self.#field_name.write_bits_to_with_max(destination,#max)?;
@@ -390,4 +408,29 @@ fn add_clone_derive(input: &mut DeriveInput)  {
     });    
 }
 
+enum FieldType {
+    Unsigned,
+    VecOrString,
+    Other,
+    
+}
+fn get_field_type(type_path: &syn::Type) -> FieldType {
+    if let syn::Type::Path(type_path) = type_path {
+        if let Some(segment) = type_path.path.segments.last() {
 
+            match segment.ident.to_string().as_str() {
+                
+                "Vec" | "String" =>{
+                    return  FieldType::VecOrString;
+                }
+                "u8" | "u16" | "u32" | "u64" | "u128" => {
+                    return  FieldType::Unsigned;
+                }
+                _ => {
+                    return  FieldType::Other;
+                }
+            }; 
+        }
+    } 
+    return  FieldType::Other;
+}

@@ -1,0 +1,16 @@
+unwrap to ?
+
+
+impl BitSerdeSerialization for TestStruct3 {
+    fn write_bits_to(&self, destination: &mut BitVec<u8, Lsb0>) -> std::io::Result<()> {
+        if (/*ERROR*/) > 100usize {
+            let error_message = {
+                let res = std::fmt::format((/*ERROR*/));
+                res
+            };
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, error_message));
+        }
+        self.vec.write_bits_to_with_max(destination, 100usize)?;
+        Ok(())
+    }
+}
