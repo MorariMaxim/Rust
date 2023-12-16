@@ -83,7 +83,7 @@ fn main() -> std::io::Result<()> {
 
     size of clas is 3 bits
 
-    size of gender is 1 bit
+    size of gender is 1 bi
 
     to encode a character, we use 2 bits to encode its length (an utf8 character has at maximum 4 bytes) and the bytes themselves
 
