@@ -5,8 +5,8 @@ extern crate byteorder;
 use bitvec::prelude::*;
 use bitvec::view::BitView;
 
-//           Main traits
-
+//           Main traits 
+ 
 pub trait BitSerdeDeserialization {
     fn deserialize(data: &Vec<u8>) -> Self;
 

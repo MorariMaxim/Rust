@@ -1,24 +1,8 @@
-use std::default;
-use std::num::IntErrorKind;
-use std::sync::Arc;
-
-use bit_serde_trait::BitSerdeDeserialization;
-use bit_serde_trait::BitSerdeDeserializationMax;
-use bit_serde_trait::BitSerdeSerialization;
-use bit_serde_trait::BitSerdeSerializationMax;
-
-use proc_macro::{token_stream, Ident, Span};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned, ToTokens};
-use syn::FieldsNamed;
-use syn::ext::IdentExt;
-use syn::spanned::Spanned;
-use syn::token::Type;
-use syn::DataStruct;
-use syn::Field;
+use syn::spanned::Spanned;use syn::Field;
 use syn::{
-    parse_macro_input, parse_quote, Attribute, AttributeArgs, Data, DeriveInput, Fields,
-    GenericParam, Generics, Index, Meta,
+    parse_macro_input, AttributeArgs, Data, DeriveInput, Fields,    
 };
 #[proc_macro_attribute]
 pub fn bit_serde(
@@ -29,30 +13,29 @@ pub fn bit_serde(
     let mut de_flag: bool = false;
 
     check_attributes(args, &mut ser_flag, &mut de_flag);
-
-    if ser_flag {
-        println!("Going to implement serialize")
-    }
-    if de_flag {
-        println!("Going to implement deserialize")
-    }
-
+    
     let mut input = parse_macro_input!(input as DeriveInput);
-    let input_tokens = input.to_token_stream();
     let data = &input.data;
 
     let mut result: TokenStream = quote! { 
     };
 
-    if ser_flag || de_flag == false {}
+    if ser_flag || de_flag == false {
 
-
+    }
 
     match data {
-        Data::Struct(_) => {
-            
-            let tokens = struct_implementation(&input,ser_flag,de_flag);
-            
+        Data::Struct(_) => {            
+            let tokens = struct_implementation(&input,ser_flag,de_flag);            
+
+            result = quote ! {
+                #result
+                #tokens
+            }
+        }
+        Data::Enum(_) =>{            
+            let tokens = enum_implementation(&mut input,ser_flag,de_flag);            
+
             result = quote ! {
                 #result
                 #tokens
@@ -88,9 +71,9 @@ fn check_attributes(
                 syn::Meta::Path(path) => {
                     if let Some(id) = path.get_ident() {
                         if id == "Deserialize" {
-                            *ser_flag = true;
-                        } else if id == "Serialize" {
                             *de_flag = true;
+                        } else if id == "Serialize" {
+                            *ser_flag = true;
                         } else {
                             unimplemented!("{attribute_error_message}");
                         }
@@ -125,7 +108,7 @@ fn check_max_constraint(field: &Field) -> Option<usize> {
                         if let syn::Lit::Int(val) = lit {
                             let number_str = val.base10_digits();
 
-                            println!("{} = {}", id.to_string(), val.base10_digits());
+                            //println!("{} = {}", id.to_string(), val.base10_digits());
 
                             if  id.to_string() == "max" {
                                 match number_str.parse::<usize>() {
@@ -177,16 +160,23 @@ fn struct_implementation(input: &DeriveInput, ser_flag : bool, deser_flag : bool
                 if ser_flag{
                     let field_write_bits_to = fields.iter().map(|f| {
                         let field_name = format_ident!("{}", f.ident.clone().unwrap().to_string());
-                        
-                        let constraint = check_max_constraint(f);
-
+                        let constraint = check_max_constraint(f); 
+                         
                         if let Some(max) = constraint {
+                            let part1 = format!("SerializationError: field '{}'",f.ident.clone().unwrap().to_string());
+                            let part2 = format!("exceeds constraint '{}'",max);
                             quote_spanned! {f.ty.span() =>
+                                if (self.#field_name as usize) > #max {
+                                    let error_message = format!("{} = {} {}",#part1,self.#field_name, #part2);
+                                    return Err(std::io::Error::new(std::io::ErrorKind::Other, error_message ));
+                                }
                                 self.#field_name.write_bits_to_with_max(destination,#max)?;
                             }
                         }
                         else {
                             quote_spanned! {f.ty.span() =>
+
+                                //BitSerdeSerialization::write_bits_to(&self.#field_name,destination)?;
                                 self.#field_name.write_bits_to(destination)?;
                             }
                         }
@@ -267,6 +257,86 @@ fn struct_implementation(input: &DeriveInput, ser_flag : bool, deser_flag : bool
 result
 }
 
+fn enum_implementation(input: &mut DeriveInput, ser_flag : bool, deser_flag : bool) -> TokenStream {
+    let mut result: TokenStream = quote! {
+
+    };
+    add_clone_derive(input);
+    
+    let enum_name = &input.ident;  
+    if let Data::Enum(en) = &input.data{
+        
+        let variants = &en.variants;
+
+        let mut fields_counter = 0usize;
+
+        for variant in variants.iter() {
+            fields_counter +=1;
+                        
+            if let syn::Fields::Named(_) | syn::Fields::Unnamed(_) = &variant.fields {
+                panic!("a variant of the enum has fields, the macro doesn't implement serialization for them");
+            }                         
+        }
+        fields_counter-=1;
+        if ser_flag { 
+            result = quote ! {
+                #result
+                
+                impl BitSerdeSerialization for #enum_name {
+                    fn write_bits_to(&self, destination: &mut BitVec<u8, Lsb0>) -> std::io::Result<()> {
+                                                
+                        let val = ((*self).clone() as usize) as u128;
+                        
+                        val.write_bits_to_with_max(destination,#fields_counter)?;
+
+                        Ok (())
+                    }                    
+                }
+            }
+        }
+
+        if deser_flag{
+             
+            let mut counter = 0usize;
+            let arms = variants.iter().map(|v|  {
+                
+                let variant_name = &v.ident;
+                let tokens = quote! {
+                    #counter => #enum_name::#variant_name,
+                };
+                counter+=1;
+                
+                tokens
+            });
+
+            result = quote! {
+
+                #result
+
+                impl BitSerdeDeserialization for #enum_name {
+                    fn deserialize(data: &Vec<u8>) -> Self {
+                        let bs = data.view_bits::<Lsb0>();
+                
+                        BitSerdeDeserialization::deserialize_from(bs).1
+                    }
+                    fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&bitvec::slice::BitSlice<u8>, #enum_name) {
+
+                        let parts:(&BitSlice<u8,Lsb0>, u128 )  = BitSerdeDeserializationMax::deserialize_from_with_max(&data,#fields_counter);
+                        data = parts.0;
+    
+                        let variant = match parts.1 as usize {
+                            #(#arms)*
+                            _ => {panic!("something went wrong");} 
+                        };
+    
+                        (data,variant)
+                    }                    
+                } 
+            }
+        }
+    }
+    result
+}
 
 fn strip_attributes(input: &mut DeriveInput ) {
     
@@ -301,3 +371,23 @@ fn strip_attributes(input: &mut DeriveInput ) {
     }
     
 } 
+
+
+fn add_clone_derive(input: &mut DeriveInput)  {
+        
+    let derive_segment = syn::PathSegment {
+        ident: syn::Ident::new("derive", proc_macro2::Span::call_site()),
+        arguments: Default::default(),
+    };
+
+    input.attrs.push(syn::Attribute {
+        pound_token: Default::default(),
+        style:syn::AttrStyle::Outer ,
+        bracket_token: Default::default(),
+        path: derive_segment.into(),
+        tokens: quote! { (Clone) }.to_token_stream(),
+
+    });    
+}
+
+
