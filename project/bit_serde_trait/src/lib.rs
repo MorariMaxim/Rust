@@ -1,18 +1,18 @@
 use bitvec::prelude::*;
-
+use std::io::{Error, ErrorKind};
 //           Main traits
-
+//std::io::Result<(&BitSlice<u8, Lsb0>,Self)>
 pub trait BitSerdeDeserialization
 where
     Self: Sized,
 {
-    fn deserialize(data: &Vec<u8>) -> Self {
+    fn deserialize(data: &Vec<u8>) -> std::io::Result<Self> {
         let bs = data.view_bits::<Lsb0>();
 
-        BitSerdeDeserialization::deserialize_from(bs).1
+        Ok(BitSerdeDeserialization::deserialize_from(bs)?.1)
     }
 
-    fn deserialize_from(data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self);
+    fn deserialize_from(data: &BitSlice<u8, Lsb0>) -> std::io::Result<(&BitSlice<u8, Lsb0>, Self)>;
 }
 pub trait BitSerdeSerialization {
     fn serialize(&self) -> std::io::Result<Vec<u8>> {
@@ -30,58 +30,20 @@ pub trait BitSerdeSerialization {
 //      IMplementation for Vectors
 impl<E: BitSerdeSerialization> BitSerdeSerialization for Vec<E> {
     fn write_bits_to(&self, destination: &mut BitVec<u8, Lsb0>) -> std::io::Result<()> {
-        let len = self.len();
-
-        destination.extend(len.view_bits::<Lsb0>());
-
-        for el in self.iter() {
-            el.write_bits_to(destination)?;
-        }
-
-        Ok(())
+        self.write_bits_to_with_max(destination, usize::MAX)
     }
 }
 impl<E: BitSerdeDeserialization> BitSerdeDeserialization for Vec<E> {
-    fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&bitvec::slice::BitSlice<u8>, Vec<E>) {
-        const SIZE: usize = std::mem::size_of::<usize>();
-
-        let mut bytes = data[0..SIZE * 8].to_bitvec();
-        bytes.force_align();
-        let bytes = bytes.into_vec();
-
-        if bytes.len() != SIZE {
-            panic!("uneuqal sizes, bytes.len = {}", bytes.len());
-        }
-
-        let mut x: [u8; SIZE] = [0; SIZE];
-
-        let mut it = 0u8;
-        for i in bytes {
-            x[it as usize] = i;
-            it += 1;
-        }
-
-        let len: usize = <usize>::from_le_bytes(x);
-
-        let mut vec = Vec::<E>::with_capacity(len);
-
-        data = &data[SIZE * 8..];
-
-        for _ in 0..len {
-            let result = BitSerdeDeserialization::deserialize_from(data);
-
-            vec.push(result.1);
-            data = result.0;
-        }
-
-        (data, vec)
+    fn deserialize_from(
+        data: &BitSlice<u8, Lsb0>,
+    ) -> std::io::Result<(&bitvec::slice::BitSlice<u8>, Vec<E>)> {
+        BitSerdeDeserializationMax::deserialize_from_with_max(data, usize::MAX)
     }
 }
-
 // Implementation for number types
 use std::mem;
-macro_rules! implement_traits_for_unsigned_types {
-    ($($t:ty),*) => {
+macro_rules! implement_traits_for_number_types {
+    ($($t:tt),*) => {
         $(
             impl BitSerdeSerialization for $t {
                 fn write_bits_to(&self, destination: &mut BitVec<u8,Lsb0>) -> std::io::Result<()> {
@@ -96,11 +58,12 @@ macro_rules! implement_traits_for_unsigned_types {
 
             impl BitSerdeDeserialization for $t {
 
-                fn deserialize_from(mut data: &BitSlice<u8,Lsb0>) -> (&BitSlice<u8, Lsb0>,Self) {
+                fn deserialize_from(mut data: &BitSlice<u8,Lsb0>) ->std::io::Result<(&BitSlice<u8, Lsb0>,Self)> {
 
                     const SIZE : usize = mem::size_of::<$t>();
 
-                    let mut bytes = data[0..SIZE*8].to_bitvec();
+                    let bytes = data.get(0..SIZE*8).ok_or_else( || error_message(SIZE))?;
+                    let mut bytes = bytes.to_bitvec();
                     bytes.force_align();
                     let bytes = bytes.into_vec();
 
@@ -111,15 +74,15 @@ macro_rules! implement_traits_for_unsigned_types {
                         x[it as usize] = i;
                         it+=1;
                     }
-                    data = &data[SIZE*8..];
+                    data = data.get(SIZE*8..).ok_or_else( || error_message(SIZE*8))?;
 
-                    (data,<$t>::from_le_bytes(x))
+                    Ok((data,<$t>::from_le_bytes(x)))
                 }
             }
         )*
     };
 }
-implement_traits_for_unsigned_types!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f32, f64);
+implement_traits_for_number_types!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f32, f64);
 
 //      Implementation for String
 
@@ -135,16 +98,17 @@ impl BitSerdeSerialization for String {
         Ok(())
     }
 }
-
 impl BitSerdeDeserialization for String {
-    fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self) {
-        let vec: (&BitSlice<u8, Lsb0>, Vec<u8>) = BitSerdeDeserialization::deserialize_from(data);
+    fn deserialize_from(
+        mut data: &BitSlice<u8, Lsb0>,
+    ) -> std::io::Result<(&BitSlice<u8, Lsb0>, Self)> {
+        let vec: (&BitSlice<u8, Lsb0>, Vec<u8>) = BitSerdeDeserialization::deserialize_from(data)?;
 
         data = vec.0;
 
         let str = String::from_utf8(vec.1).unwrap();
 
-        (data, str)
+        Ok((data, str))
     }
 }
 
@@ -157,12 +121,14 @@ impl BitSerdeSerialization for bool {
 }
 
 impl BitSerdeDeserialization for bool {
-    fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self) {
+    fn deserialize_from(
+        mut data: &BitSlice<u8, Lsb0>,
+    ) -> std::io::Result<(&BitSlice<u8, Lsb0>, Self)> {
         let val: bool = data[0];
 
-        data = &data[1..];
+        data = data.get(1..).ok_or_else(|| error_message(1))?;
 
-        (data, val)
+        Ok((data, val))
     }
 }
 
@@ -185,11 +151,19 @@ impl BitSerdeSerialization for char {
 }
 
 impl BitSerdeDeserialization for char {
-    fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&BitSlice<u8, Lsb0>, Self) {
-        let mut len: usize = data.chunks(2).next().unwrap().load_le();
+    fn deserialize_from(
+        mut data: &BitSlice<u8, Lsb0>,
+    ) -> std::io::Result<(&BitSlice<u8, Lsb0>, Self)> {
+        let mut len: usize = data
+            .chunks(2)
+            .next()
+            .ok_or_else(|| error_message(2))?
+            .load_le();
         len += 1;
 
-        let bs = &data[2..(len * 8 + 2)];
+        let bs = data
+            .get(2..(len * 8 + 2))
+            .ok_or_else(|| error_message(len * 8 + 2))?;
 
         let mut bytes: Vec<u8> = Vec::with_capacity(len);
         for c in bs.chunks(8) {
@@ -199,8 +173,8 @@ impl BitSerdeDeserialization for char {
 
         let val = std::str::from_utf8(&bytes).unwrap().chars().next().unwrap();
 
-        data = &data[(len * 8 + 2)..];
-        (data, val)
+        data = data.get((len * 8 + 2)..).ok_or_else(|| error_message(len*8+2))?;
+        Ok((data, val))
     }
 }
 
@@ -208,15 +182,15 @@ pub trait BitSerdeDeserializationMax
 where
     Self: Sized,
 {
-    fn deserialize_with_max(data: &Vec<u8>, max: usize) -> Self {
+    fn deserialize_with_max(data: &Vec<u8>, max: usize) -> std::io::Result<Self> {
         let bs = data.view_bits::<Lsb0>();
 
-        BitSerdeDeserializationMax::deserialize_from_with_max(bs, max).1
+        Ok(BitSerdeDeserializationMax::deserialize_from_with_max(bs, max)?.1)
     }
     fn deserialize_from_with_max(
         data: &BitSlice<u8, Lsb0>,
         max: usize,
-    ) -> (&BitSlice<u8, Lsb0>, Self);
+    ) -> std::io::Result<(&BitSlice<u8, Lsb0>, Self)>;
 }
 pub trait BitSerdeSerializationMax {
     fn serialize_with_max(&self, max: usize) -> std::io::Result<Vec<u8>> {
@@ -242,7 +216,7 @@ pub fn compute_size(max: usize) -> usize {
 macro_rules! implement_trait_with_constraint {
     ($($t:ty),*) => {
         $(
-            impl BitSerdeSerializationMax for $t { 
+            impl BitSerdeSerializationMax for $t {
                 fn write_bits_to_with_max(&self, destination: &mut BitVec<u8,Lsb0>,max:usize) -> std::io::Result<()> {
 
                     let size =  {
@@ -260,7 +234,7 @@ macro_rules! implement_trait_with_constraint {
                     let bs = self.to_le_bytes();
                     let bs = bs.view_bits::<Lsb0>();
 
-                    let bs = bs.chunks(size).next().unwrap();
+                    let bs = bs.chunks(size).next().ok_or_else( || error_message(size))?;
 
                     destination.extend(bs);
 
@@ -268,8 +242,8 @@ macro_rules! implement_trait_with_constraint {
                 }
             }
 
-            impl BitSerdeDeserializationMax for $t { 
-                fn deserialize_from_with_max(mut data: &BitSlice<u8,Lsb0>, max: usize) -> (&BitSlice<u8, Lsb0>,Self) {
+            impl BitSerdeDeserializationMax for $t {
+                fn deserialize_from_with_max(mut data: &BitSlice<u8,Lsb0>, max: usize) -> std::io::Result<(&BitSlice<u8, Lsb0>,Self)> {
 
                     let size =  {
                         let bits = compute_size(max);
@@ -283,14 +257,14 @@ macro_rules! implement_trait_with_constraint {
                         }
                     };
 
-                    let mut bv = data[..size].to_bitvec();
+                    let mut bv = data.get(..size).ok_or_else(|| error_message(size))?.to_bitvec();
                     bv.force_align();
 
                     let val : $t = bv.load_le();
 
-                    data = &data[size..];
+                    data = data.get(size..).ok_or_else(|| error_message(size))?;
 
-                    (data, val)
+                    Ok((data, val))
                 }
             }
         )*
@@ -321,7 +295,12 @@ impl<E: BitSerdeSerialization> BitSerdeSerializationMax for Vec<E> {
         let bs = len.to_le_bytes();
         let bs = bs.view_bits::<Lsb0>();
 
-        let bs = bs.chunks(size).next().unwrap();
+        let bs = bs.chunks(size).next().ok_or_else(|| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                format!("need to read {} bits from input, out of bounds", size),
+            )
+        })?;
 
         destination.extend(bs);
 
@@ -332,11 +311,11 @@ impl<E: BitSerdeSerialization> BitSerdeSerializationMax for Vec<E> {
         Ok(())
     }
 }
-impl<E: BitSerdeDeserialization> BitSerdeDeserializationMax for Vec<E> { 
+impl<E: BitSerdeDeserialization> BitSerdeDeserializationMax for Vec<E> {
     fn deserialize_from_with_max(
         mut data: &BitSlice<u8, Lsb0>,
         max: usize,
-    ) -> (&BitSlice<u8, Lsb0>, Self) {
+    ) -> std::io::Result<(&BitSlice<u8, Lsb0>, Self)> {
         let size = {
             let bits = compute_size(max);
 
@@ -348,22 +327,21 @@ impl<E: BitSerdeDeserialization> BitSerdeDeserializationMax for Vec<E> {
             }
         };
 
-        let bs = &data[0..size];
+        let bs = data.get(0..size).ok_or_else(|| error_message(size))?;
 
         let len: usize = bs.load_le();
 
         let mut vec = Vec::<E>::with_capacity(len);
 
-        data = &data[size..];
+        data = data.get(size..).ok_or_else(|| error_message(size))?;
 
         for _ in 0..len {
-            let result = BitSerdeDeserialization::deserialize_from(data);
-
+            let result = BitSerdeDeserialization::deserialize_from(data)?;
             vec.push(result.1);
             data = result.0;
         }
 
-        (data, vec)
+        Ok((data, vec))
     }
 }
 
@@ -378,17 +356,27 @@ impl BitSerdeSerializationMax for String {
         Ok(())
     }
 }
-impl BitSerdeDeserializationMax for String { 
+impl BitSerdeDeserializationMax for String {
     fn deserialize_from_with_max(
         mut data: &BitSlice<u8, Lsb0>,
         max: usize,
-    ) -> (&BitSlice<u8, Lsb0>, Self) {
+    ) -> std::io::Result<(&BitSlice<u8, Lsb0>, Self)> {
         let parts: (&BitSlice<u8, Lsb0>, Vec<u8>) =
-            BitSerdeDeserializationMax::deserialize_from_with_max(data, max);
+            BitSerdeDeserializationMax::deserialize_from_with_max(data, max)?;
         data = parts.0;
 
-        (data, String::from_utf8(parts.1).unwrap())
+        Ok((
+            data,
+            String::from_utf8(parts.1)
+                .map_err(|_utf8_error| Error::new(ErrorKind::InvalidData, "Invalid UTF-8 data"))?,
+        ))
     }
+}
+fn error_message(size: usize) -> Error {
+    Error::new(
+        ErrorKind::InvalidInput,
+        format!("need to read {} bits from input, but no more bits", size),
+    )
 }
 
 #[cfg(test)]

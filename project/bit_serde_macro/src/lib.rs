@@ -220,14 +220,14 @@ fn struct_implementation(input: &DeriveInput, ser_flag : bool, deser_flag : bool
                         
                         if let Some(max) = constraint {
                             quote_spanned! {f.ty.span() =>       
-                                let parts:(&BitSlice<u8,Lsb0>, #type_name )  = BitSerdeDeserializationMax::deserialize_from_with_max(&data,#max);
+                                let parts:(&BitSlice<u8,Lsb0>, #type_name )  = BitSerdeDeserializationMax::deserialize_from_with_max(&data,#max)?;
                                 data = parts.0;
                                 let #temp = parts.1;
                             }
                         }
                         else {
                             quote_spanned! {f.ty.span() =>       
-                                let parts:(&BitSlice<u8,Lsb0>, #type_name )  = BitSerdeDeserialization::deserialize_from(&data);
+                                let parts:(&BitSlice<u8,Lsb0>, #type_name )  = BitSerdeDeserialization::deserialize_from(&data)?;
                                 data = parts.0;
                                 let #temp = parts.1;
                             }
@@ -246,12 +246,12 @@ fn struct_implementation(input: &DeriveInput, ser_flag : bool, deser_flag : bool
                     #result
 
                     impl BitSerdeDeserialization for #struct_name { 
-                        fn deserialize_from(mut data: &BitSlice<u8,Lsb0>) -> (&BitSlice<u8, Lsb0>,Self) {
+                        fn deserialize_from(mut data: &BitSlice<u8,Lsb0>) -> std::io::Result<(&BitSlice<u8, Lsb0>,Self)> {
 
                             #(#field_deserialize_from)*
                                 
                             let the_object  = Self {  #(#struct_initializtion),* };
-                            (data,the_object)
+                            Ok((data,the_object))
                         }
                     }
                     }
@@ -325,9 +325,9 @@ fn enum_implementation(input: &mut DeriveInput, ser_flag : bool, deser_flag : bo
                 #result
 
                 impl BitSerdeDeserialization for #enum_name { 
-                    fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> (&bitvec::slice::BitSlice<u8>, #enum_name) {
+                    fn deserialize_from(mut data: &BitSlice<u8, Lsb0>) -> std::io::Result<(&bitvec::slice::BitSlice<u8>, #enum_name)> {
 
-                        let parts:(&BitSlice<u8,Lsb0>, u128 )  = BitSerdeDeserializationMax::deserialize_from_with_max(&data,#fields_counter);
+                        let parts:(&BitSlice<u8,Lsb0>, u128 )  = BitSerdeDeserializationMax::deserialize_from_with_max(&data,#fields_counter)?;
                         data = parts.0;
     
                         let variant = match parts.1 as usize {
@@ -335,7 +335,7 @@ fn enum_implementation(input: &mut DeriveInput, ser_flag : bool, deser_flag : bo
                             _ => {panic!("something went wrong");} 
                         };
     
-                        (data,variant)
+                        Ok((data,variant))
                     }                    
                 } 
             }
