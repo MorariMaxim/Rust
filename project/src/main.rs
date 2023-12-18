@@ -55,7 +55,8 @@ fn main() -> std::io::Result<()> {
         clas: Class::Warrior,
         favourite_char : '🦀'
     };
-    let serialized_obj: Vec<u8> = test_instance.serialize()?;
+    let mut serialized_obj: Vec<u8> = test_instance.serialize()?;
+    //let mut serialized_obj: Vec<u8>  = vec![0u8,1,2,3].into();
     /*
     the max attribute above a string/vec indicates its maximum length, so that we don't have to usze usize (8 bytes) to encode its length
     
@@ -91,9 +92,10 @@ fn main() -> std::io::Result<()> {
     
     25 bytes + 8 bits = 26 bytes
      */
+ 
     println!("Size of serialized struct = {}", serialized_obj.len());
-
-    let deserialzed_obj: TestStruct = BitSerdeDeserialization::deserialize(&serialized_obj);
+    
+    let deserialzed_obj: TestStruct = BitSerdeDeserialization::deserialize(&serialized_obj)?;
 
     deserialzed_obj.print_fields();
 
