@@ -55,8 +55,8 @@ fn main() -> std::io::Result<()> {
         clas: Class::Warrior,
         favourite_char : '🦀'
     };
-    let mut serialized_obj: Vec<u8> = test_instance.serialize()?;
-    //let mut serialized_obj: Vec<u8>  = vec![0u8,1,2,3].into();
+    let  serialized_obj: Vec<u8> = test_instance.serialize()?;
+    //`let mut serialized_obj: Vec<u8>  = vec![0u8,1,2,3].into();
     /*
     the max attribute above a string/vec indicates its maximum length, so that we don't have to usze usize (8 bytes) to encode its length
     
