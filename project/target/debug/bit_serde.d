@@ -1,1 +1,0 @@
-D:\Uni\Anul\ 2\Rust\gitrepo\project\target\debug\bit_serde.exe: D:\Uni\Anul\ 2\Rust\gitrepo\project\bit_serde_macro\src\lib.rs D:\Uni\Anul\ 2\Rust\gitrepo\project\bit_serde_trait\src\lib.rs D:\Uni\Anul\ 2\Rust\gitrepo\project\src\main.rs
