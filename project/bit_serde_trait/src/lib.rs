@@ -210,6 +210,9 @@ pub trait BitSerdeSerializationMax {
 }
 
 pub fn compute_size(max: usize) -> usize {
+    if max == usize::MAX {
+        return (max as f64).log2().ceil() as usize;    
+    }
     ((max + 1) as f64).log2().ceil() as usize
 }
 
@@ -378,14 +381,4 @@ fn error_message(size: usize) -> Error {
         format!("need to read {} bits from input, but no more bits", size),
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+ 
