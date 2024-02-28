@@ -6,14 +6,24 @@ use bit_serde_trait::BitSerdeSerializationMax;
 
 #[bit_serde(Serialize, Deserialize)]
 #[derive(Debug)]
-struct Player {
+struct Player { 
     #[max = 255]
     name: String,
+    #[max = 31]
     level: u8,
-    class: Class,
-    race: Race,
+    class: Class,    
     #[max = 255]
-    guild: String,
+    guild: String
+}
+
+
+#[bit_serde(Serialize, Deserialize)]
+#[derive(Debug)]
+struct test {
+    #[max = 8]
+    i1 : u8,
+    #[max = 8]
+    i2 : u8,
 }
 
 #[bit_serde(Serialize, Deserialize)]
@@ -38,15 +48,20 @@ use bitvec::prelude::*;
 fn main() -> std::io::Result<()> {
     let pl = Player {
         name: "Angst".to_string(),
-        level: 99,
-        class: Class::Warrior,
-        race: Race::Beast,
-        guild: "BloodStream".to_string(),
+        level: 1,
+        class: Class::Warrior, 
+        guild: "BloodStream".to_string()
     };
 
-    let serialized_obj: Vec<u8> = pl.serialize()?;
+    let obj = test{
+        i1:1,
+        i2:2
+    };
+
+    let serialized_obj: Vec<u8> = obj.serialize()?;
     println!("{}", serialized_obj.len());
-    let deserialzed_obj: Player = BitSerdeDeserialization::deserialize(&serialized_obj)?;
+    dbg!(serialized_obj);
+    let deserialzed_obj: test = BitSerdeDeserialization::deserialize(&serialized_obj)?;
     println!("{:?}", deserialzed_obj);
     Ok(())
 }

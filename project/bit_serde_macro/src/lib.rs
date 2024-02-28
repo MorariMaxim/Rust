@@ -20,10 +20,6 @@ pub fn bit_serde(
     let mut result: TokenStream = quote! { 
     };
 
-    if ser_flag || de_flag == false {
-
-    }
-
     match data {
         Data::Struct(_) => {            
             let tokens = struct_implementation(&input,ser_flag,de_flag);            
@@ -151,7 +147,7 @@ fn struct_implementation(input: &DeriveInput, ser_flag : bool, deser_flag : bool
 
     };
     let struct_name = &input.ident;    
-    if let Data::Struct(the_struct) = &input.data{
+    if let Data::Struct(the_struct) = &input.data {
 
         match the_struct.fields {
             Fields::Named(ref fields) => {
