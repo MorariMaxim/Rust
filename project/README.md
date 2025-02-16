@@ -68,18 +68,18 @@ Let's analyse the size if this TestStruct instance.
 The **max** attribute above a string/vector indicates its maximum length, so that we don't have to use **usize** (4/8 bytes, used by Rust for this purpose) to encode its length
 
 - size of **name**:
-	its maximum length is 255, log(255+1) = 8, so 1 byte for its len
-	the content of the string itself is 8 bytes
-	size of name = 9
+	- its maximum length is 255, log(255+1) = 8, so 1 byte for its len
+	- the content of the string itself is 8 bytes
+	- size of name = 9
 
 so far **9** bytes
 
 - size of **friends**:
-    similar to name, its len = 1 byte
-    now, we have to wrap the content of its elements in another struct, because max attribute applies only
-    to the len of the vector, not the strings in it.
-    the size of a NameStruct is 1 byte + string.len()
-    the size of friends = 1(for length of friends) + 1 + 1 (for length of the 2 NameStruct) + 5 + 3 (lengths of 'Alice' and 'Bob') = 11 bytes
+    - similar to name, its len = 1 byte
+    - now, we have to wrap the content of its elements in another struct, because max attribute applies only
+    - to the len of the vector, not the strings in it.
+    - the size of a NameStruct is 1 byte + string.len()
+    - the size of friends = 1(for length of friends) + 1 + 1 (for length of the 2 NameStruct) + 5 + 3 (lengths of 'Alice' and 'Bob') = 11 bytes
 
 so far **20** bytes
 
